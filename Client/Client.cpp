@@ -6,11 +6,20 @@ using namespace std;
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Winmm.lib")
 
-ENetAddress address;
 ENetHost* client = nullptr;
+ENetAddress address;
+ENetEvent event;
+ENetPeer* peer;
+
+string userInput = "";
+string userName = "";
 
 bool CreateClient();
+int InitClient();
 int RunClient();
+void HandleConnection();
+void HandleEvent();
+void HandlePacket(string message);
 
 int main(int argc, char** argv)
 {
@@ -28,7 +37,7 @@ bool CreateClient()
     return client != nullptr;
 }
 
-int RunClient()
+int InitClient()
 {
     if (enet_initialize() != 0)
     {
@@ -36,18 +45,45 @@ int RunClient()
         cout << "An error occurred while initializing ENet." << endl;
         return EXIT_FAILURE;
     }
-    atexit(enet_deinitialize);
 
     if (!CreateClient())
     {
         fprintf(stderr,
             "An error occurred while trying to create an ENet client host.\n");
+        cout << "An error occurred while trying to create an ENet client host." << endl;
         exit(EXIT_FAILURE);
     }
+}
 
-    ENetAddress address;
-    ENetEvent event;
-    ENetPeer* peer;
+int RunClient()
+{
+    atexit(enet_deinitialize);
+    
+    InitClient();
+
+    HandleConnection();
+
+    cout << "Enter your username?" << endl;
+    cin >> userName;
+    cout << "Welcome " << userName << "! You may begin chatting." << endl;
+
+    while (1)
+    {
+        HandleEvent();
+    }
+
+    if (client != nullptr)
+    {
+        enet_host_destroy(client);
+    }
+
+
+    return EXIT_SUCCESS;
+}
+
+
+void HandleConnection()
+{
     /* Connect to some.server.net:1234. */
     enet_address_set_host(&address, "127.0.0.1");
     address.port = 1234;
@@ -73,45 +109,36 @@ int RunClient()
         enet_peer_reset(peer);
         cout << "Connection to 127.0.0.1:1234 failed." << endl;
     }
+}
 
-    while (1)
+void HandleEvent()
+{
+    /* Wait up to 1000 milliseconds for an event. */
+    while (enet_host_service(client, &event, 1000) > 0)
     {
-        ENetEvent event;
-        /* Wait up to 1000 milliseconds for an event. */
-        while (enet_host_service(client, &event, 1000) > 0)
+        switch (event.type)
         {
-            switch (event.type)
-            {
-            case ENET_EVENT_TYPE_RECEIVE:
-                cout << "A packet of length "
-                    << event.packet->dataLength << endl
-                    << "containing " << (char*)event.packet->data
-                    << endl;
-                /* Clean up the packet now that we're done using it. */
-                enet_packet_destroy(event.packet);
+        case ENET_EVENT_TYPE_RECEIVE:
+            /* Clean up the packet now that we're done using it. */
+            enet_packet_destroy(event.packet);
 
-                {
-                    /* Create a reliable packet of size 7 containing "packet\0" */
-                    ENetPacket* packet = enet_packet_create("hi",
-                        strlen("hi") + 1,
-                        ENET_PACKET_FLAG_RELIABLE);
-
-                    enet_host_broadcast(client, 0, packet);
-                    //enet_peer_send(event.peer, 0, packet);
-
-                    /* One could just use enet_host_service() instead. */
-                    //enet_host_service();
-                    enet_host_flush(client);
-                }
-            }
+            HandlePacket(userName);
         }
     }
+}
 
-    if (client != nullptr)
-    {
-        enet_host_destroy(client);
-    }
+void HandlePacket(string message)
+{
+    /* Create a reliable packet of size 7 containing "packet\0" */
+    string formattedMessage = userName + ": " + message;
+    ENetPacket* packet = enet_packet_create(formattedMessage.c_str(),
+        formattedMessage.length() + 1,
+        ENET_PACKET_FLAG_RELIABLE);
 
+    enet_host_broadcast(client, 0, packet);
+    //enet_peer_send(event.peer, 0, packet);
 
-    return EXIT_SUCCESS;
+    /* One could just use enet_host_service() instead. */
+    //enet_host_service();
+    enet_host_flush(client);
 }

@@ -1,16 +1,26 @@
 #include <enet/enet.h>
 
 #include <iostream>
+#include <string>
+
 using namespace std;
 
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Winmm.lib")
 
-ENetAddress address;
 ENetHost* server = nullptr;
+ENetAddress address;
+ENetEvent event;
+ENetPeer* peer;
+
+string userInput = "";
+string userName = "";
 
 bool CreateServer();
+int InitServer();
 int RunServer();
+void HandleEvent();
+void HandlePacket(string message);
 
 
 int main(int argc, char** argv)
@@ -37,7 +47,7 @@ bool CreateServer()
     return server != nullptr;
 }
 
-int RunServer()
+int InitServer()
 {
     if (enet_initialize() != 0)
     {
@@ -45,7 +55,6 @@ int RunServer()
         cout << "An error occurred while initializing ENet." << endl;
         return EXIT_FAILURE;
     }
-    atexit(enet_deinitialize);
 
     if (!CreateServer())
     {
@@ -53,7 +62,30 @@ int RunServer()
             "An error occurred while trying to create an ENet server host.\n");
         exit(EXIT_FAILURE);
     }
+}
 
+int RunServer()
+{
+    atexit(enet_deinitialize);
+
+    InitServer();
+
+    cout << "Enter your username?" << endl;
+    cin >> userName;
+    cout << "Welcome " << userName << "! You may begin chatting." << endl;
+
+    HandleEvent();
+
+    if (server != nullptr)
+    {
+        enet_host_destroy(server);
+    }
+
+    return EXIT_SUCCESS;
+}
+
+void HandleEvent()
+{
     while (1)
     {
         ENetEvent event;
@@ -70,49 +102,38 @@ int RunServer()
                 /* Store any relevant client information here. */
                 event.peer->data = (void*)("Client information");
 
-                {
-                    /* Create a reliable packet of size 7 containing "packet\0" */
-                    ENetPacket* packet = enet_packet_create("hello",
-                        strlen("hello") + 1,
-                        ENET_PACKET_FLAG_RELIABLE);
-                    /* Extend the packet so and append the string "foo", so it now */
-                    /* contains "packetfoo\0"                                      */
-                    //enet_packet_resize(packet, strlen("packetfoo") + 1);
-                    //strcpy(&packet->data[strlen("packet")], "foo");
-                    /* Send the packet to the peer over channel id 0. */
-                    /* One could also broadcast the packet by         */
-                    enet_host_broadcast(server, 0, packet);
-                    //enet_peer_send(event.peer, 0, packet);
+                HandlePacket(userName);
 
-                    /* One could just use enet_host_service() instead. */
-                    //enet_host_service();
-                    enet_host_flush(server);
-                }
                 break;
             case ENET_EVENT_TYPE_RECEIVE:
-                cout << "A packet of length "
-                    << event.packet->dataLength << endl
-                    << "containing " << (char*)event.packet->data
-                    << endl;
-                //<< "was received from " << (char*)event.peer->data
-                //<< " on channel " << event.channelID << endl;
+                cout << (char*)event.packet->data << endl;
+
             /* Clean up the packet now that we're done using it. */
                 enet_packet_destroy(event.packet);
 
                 break;
 
             case ENET_EVENT_TYPE_DISCONNECT:
-                cout << (char*)event.peer->data << "disconnected." << endl;
+                cout << (char*)event.peer->data << " disconnected." << endl;
                 /* Reset the peer's client information. */
                 event.peer->data = NULL;
             }
         }
     }
+}
 
-    if (server != nullptr)
-    {
-        enet_host_destroy(server);
-    }
+void HandlePacket(string message)
+{
+    /* Create a reliable packet of size 7 containing "packet\0" */
+    string formattedMessage = userName + ": " + message;
+    ENetPacket* packet = enet_packet_create(formattedMessage.c_str(),
+        formattedMessage.length() + 1,
+        ENET_PACKET_FLAG_RELIABLE);
 
-    return EXIT_SUCCESS;
+    enet_host_broadcast(server, 0, packet);
+    //enet_peer_send(event.peer, 0, packet);
+
+    /* One could just use enet_host_service() instead. */
+    //enet_host_service();
+    enet_host_flush(server);
 }

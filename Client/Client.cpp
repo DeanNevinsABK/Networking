@@ -9,6 +9,14 @@ using namespace std;
 ENetAddress address;
 ENetHost* client = nullptr;
 
+bool CreateClient();
+int RunClient();
+
+int main(int argc, char** argv)
+{
+    RunClient();
+}
+
 bool CreateClient()
 {
     client = enet_host_create(NULL /* create a client host */,
@@ -20,7 +28,7 @@ bool CreateClient()
     return client != nullptr;
 }
 
-int main(int argc, char** argv)
+int RunClient()
 {
     if (enet_initialize() != 0)
     {
@@ -29,7 +37,7 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
     atexit(enet_deinitialize);
-    
+
     if (!CreateClient())
     {
         fprintf(stderr,

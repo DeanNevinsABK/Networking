@@ -1,6 +1,7 @@
 #include <enet/enet.h>
 
 #include <iostream>
+#include <thread>
 using namespace std;
 
 #pragma comment(lib, "Ws2_32.lib")
@@ -13,15 +14,14 @@ ENetPeer* peer;
 
 string userInput = "";
 string userName = "";
-bool hasConnected = false;
-bool hasChatEnded = false;
+bool didQuit = false;
 
 bool CreateClient();
 int InitClient();
 int RunClient();
 void HandleConnection();
 void HandleEvent();
-void HandlePacket(string message);
+void HandlePacket();
 
 int main(int argc, char** argv)
 {
@@ -69,9 +69,15 @@ int RunClient()
     cin >> userName;
     cout << "Welcome " << userName << "! You may begin chatting." << endl;
 
-    while (1)
+    //while (enet_host_service(client, &event, 50) > 0 && !didQuit)
+    while (true)
     {
+        thread PacketThread(HandlePacket);
         HandleEvent();
+        /* One could just use enet_host_service() instead. */
+        //enet_host_service();
+        enet_host_flush(client);
+        PacketThread.join();
     }
 
     if (client != nullptr)
@@ -101,7 +107,6 @@ void HandleConnection()
     if (enet_host_service(client, &event, 5000) > 0 &&
         event.type == ENET_EVENT_TYPE_CONNECT)
     {
-        hasConnected = true;
         cout << "Connection to 127.0.0.1:1234 succeeded." << endl;
     }
     else
@@ -115,36 +120,31 @@ void HandleConnection()
 }
 
 void HandleEvent()
-{
-    /* Wait up to 1000 milliseconds for an event. */
-    while (enet_host_service(client, &event, 50) >= 0)
+{    
+    if (enet_host_service(client, &event, 50) > 0)
     {
-        
-        cout << userName << ": ";
-        cin >> userInput;
-        switch (1)
+        switch (event.type)
         {
         case ENET_EVENT_TYPE_RECEIVE:
+            /* Print received packet. */
+            cout << (char*)event.packet->data << endl;
             /* Clean up the packet now that we're done using it. */
             enet_packet_destroy(event.packet);
-
-            HandlePacket(userInput);
         }
     }
 }
 
-void HandlePacket(string message)
+void HandlePacket()
 {
+    cout << userName << ": ";
+    cin >> userInput;
+
     /* Create a reliable packet of size 7 containing "packet\0" */
-    string formattedMessage = userName + ": " + message;
+    string formattedMessage = userName + ": " + userInput;
     ENetPacket* packet = enet_packet_create(formattedMessage.c_str(),
         formattedMessage.length() + 1,
         ENET_PACKET_FLAG_RELIABLE);
 
     enet_host_broadcast(client, 0, packet);
     //enet_peer_send(event.peer, 0, packet);
-
-    /* One could just use enet_host_service() instead. */
-    //enet_host_service();
-    enet_host_flush(client);
 }

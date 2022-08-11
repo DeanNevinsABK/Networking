@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <thread>
+#include <string>
 using namespace std;
 
 #pragma comment(lib, "Ws2_32.lib")
@@ -76,8 +77,8 @@ int RunClient()
         HandleEvent();
         /* One could just use enet_host_service() instead. */
         //enet_host_service();
-        enet_host_flush(client);
         PacketThread.join();
+        enet_host_flush(client);
     }
 
     if (client != nullptr)
@@ -138,7 +139,7 @@ void HandlePacket()
 {
     string formattedMessage;
     cout << userName << ": ";
-    cin >> userInput;
+    getline(cin, userInput);
     if (userInput == "quit")
     {
         formattedMessage = userName + " has left the chat.";

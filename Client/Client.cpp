@@ -16,6 +16,7 @@ ENetPeer* peer;
 string userInput = "";
 string userName = "";
 bool didQuit = false;
+const int k_eventWaitTime = 50;
 
 bool CreateClient();
 int InitClient();
@@ -67,19 +68,12 @@ int RunClient()
     HandleConnection();
 
     cout << "Enter your username?" << endl;
-    cin >> userName;
+    getline(cin, userName);
     cout << "Welcome " << userName << "! You may begin chatting." << endl;
 
-    //while (enet_host_service(client, &event, 50) > 0 && !didQuit)
-    while (!didQuit)
-    {
-        thread PacketThread(HandlePacket);
-        HandleEvent();
-        /* One could just use enet_host_service() instead. */
-        //enet_host_service();
-        PacketThread.join();
-        enet_host_flush(client);
-    }
+    thread PacketThread(HandlePacket);
+    HandleEvent();
+    PacketThread.join();
 
     if (client != nullptr)
     {
@@ -122,7 +116,7 @@ void HandleConnection()
 
 void HandleEvent()
 {    
-    if (enet_host_service(client, &event, 50) > 0)
+    while (enet_host_service(client, &event, k_eventWaitTime) >= 0 && !didQuit)
     {
         switch (event.type)
         {
@@ -133,29 +127,31 @@ void HandleEvent()
             enet_packet_destroy(event.packet);
         }
     }
+    enet_host_flush(client);
 }
 
 void HandlePacket()
 {
-    string formattedMessage;
-    cout << userName << ": ";
-    getline(cin, userInput);
-    if (userInput == "quit")
+    do
     {
-        formattedMessage = userName + " has left the chat.";
-        didQuit = true;
-    }
-    else
-    {
-        formattedMessage = userName + ": " + userInput;
-    }
-    /* Create a reliable packet of size 7 containing "packet\0" */
-    
-    ENetPacket* packet = enet_packet_create(formattedMessage.c_str(),
-        formattedMessage.length() + 1,
-        ENET_PACKET_FLAG_RELIABLE);
+        string formattedMessage;
+        getline(cin, userInput);
+        if (userInput == "quit")
+        {
+            formattedMessage = userName + " has left the chat.";
+            didQuit = true;
+        }
+        else
+        {
+            formattedMessage = userName + ": " + userInput;
+        }
+        /* Create a reliable packet of size 7 containing "packet\0" */
 
-    enet_host_broadcast(client, 0, packet);
-    //enet_peer_send(event.peer, 0, packet);
-    
+        ENetPacket* packet = enet_packet_create(formattedMessage.c_str(),
+            formattedMessage.length() + 1,
+            ENET_PACKET_FLAG_RELIABLE);
+
+        enet_host_broadcast(client, 0, packet);
+        //enet_peer_send(event.peer, 0, packet);
+    } while (!didQuit);    
 }

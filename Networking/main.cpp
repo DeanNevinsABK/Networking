@@ -1,6 +1,7 @@
 #include <enet/enet.h>
 
 #include <iostream>
+#include <thread>
 #include <string>
 
 using namespace std;
@@ -15,19 +16,19 @@ ENetPeer* peer;
 
 string userInput = "";
 string userName = "";
+bool didQuit = false;
+const int k_eventWaitTime = 50;
 
 bool CreateServer();
 int InitServer();
 int RunServer();
 void HandleEvent();
-void HandlePacket(string message);
+void HandlePacket();
 
 
 int main(int argc, char** argv)
 {
-    
-    RunServer();
-    
+    RunServer();   
 }
 
 bool CreateServer()
@@ -71,10 +72,12 @@ int RunServer()
     InitServer();
 
     cout << "Enter your username?" << endl;
-    cin >> userName;
+    getline(cin, userName);
     cout << "Welcome " << userName << "! You may begin chatting." << endl;
 
+    thread PacketThread(HandlePacket);
     HandleEvent();
+    PacketThread.join();
 
     if (server != nullptr)
     {
@@ -86,54 +89,59 @@ int RunServer()
 
 void HandleEvent()
 {
-    while (1)
+    /* Wait up to 100 milliseconds for an event. */
+    while (enet_host_service(server, &event, k_eventWaitTime) >= 0 && !didQuit)
     {
-        ENetEvent event;
-        /* Wait up to 1000 milliseconds for an event. */
-        if (enet_host_service(server, &event, 50) >= 0)
+        switch (event.type)
         {
-            switch (event.type)
-            {
-            case ENET_EVENT_TYPE_CONNECT:
-                cout << "A new client connected from "
-                    << event.peer->address.host
-                    << ":" << event.peer->address.port
-                    << endl;
-                /* Store any relevant client information here. */
-                event.peer->data = (void*)("Client information");
+        case ENET_EVENT_TYPE_CONNECT:
+            cout << "A new client connected from "
+                << event.peer->address.host
+                << ":" << event.peer->address.port
+                << endl;
+            /* Store any relevant client information here. */
+            event.peer->data = (void*)("Client information");
 
-                HandlePacket(userName);
+            break;
 
-                break;
-            case ENET_EVENT_TYPE_RECEIVE:
-                cout << (char*)event.packet->data << endl;
+        case ENET_EVENT_TYPE_RECEIVE:
+            cout << (char*)event.packet->data << endl;
+        /* Clean up the packet now that we're done using it. */
+            enet_packet_destroy(event.packet);
 
-            /* Clean up the packet now that we're done using it. */
-                enet_packet_destroy(event.packet);
+            break;
 
-                break;
-
-            case ENET_EVENT_TYPE_DISCONNECT:
-                cout << (char*)event.peer->data << " disconnected." << endl;
-                /* Reset the peer's client information. */
-                event.peer->data = NULL;
-            }
+        case ENET_EVENT_TYPE_DISCONNECT:
+            cout << (char*)event.peer->data << " disconnected." << endl;
+            /* Reset the peer's client information. */
+            event.peer->data = NULL;
         }
+
+        enet_host_flush(server);
     }
 }
 
-void HandlePacket(string message)
+void HandlePacket()
 {
-    /* Create a reliable packet of size 7 containing "packet\0" */
-    string formattedMessage = userName + ": " + message;
-    ENetPacket* packet = enet_packet_create(formattedMessage.c_str(),
-        formattedMessage.length() + 1,
-        ENET_PACKET_FLAG_RELIABLE);
+    do
+    {
+        string formattedMessage;
+        getline(cin, userInput);
+        if (userInput == "quit")
+        {
+            formattedMessage = "The server host (" + userName + ") has ended the chat session.";
+            didQuit = true;
+        }
+        else
+        {
+            formattedMessage = userName + ": " + userInput;
+        }
+        /* Create a reliable packet of size 7 containing "packet\0" */
+        ENetPacket* packet = enet_packet_create(formattedMessage.c_str(),
+            formattedMessage.length() + 1,
+            ENET_PACKET_FLAG_RELIABLE);
 
-    enet_host_broadcast(server, 0, packet);
-    //enet_peer_send(event.peer, 0, packet);
-
-    /* One could just use enet_host_service() instead. */
-    //enet_host_service();
-    enet_host_flush(server);
+        enet_host_broadcast(server, 0, packet);
+        //enet_peer_send(event.peer, 0, packet);
+    } while (!didQuit);
 }

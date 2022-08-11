@@ -70,7 +70,7 @@ int RunClient()
     cout << "Welcome " << userName << "! You may begin chatting." << endl;
 
     //while (enet_host_service(client, &event, 50) > 0 && !didQuit)
-    while (true)
+    while (!didQuit)
     {
         thread PacketThread(HandlePacket);
         HandleEvent();
@@ -136,15 +136,25 @@ void HandleEvent()
 
 void HandlePacket()
 {
+    string formattedMessage;
     cout << userName << ": ";
     cin >> userInput;
-
+    if (userInput == "quit")
+    {
+        formattedMessage = userName + " has left the chat.";
+        didQuit = true;
+    }
+    else
+    {
+        formattedMessage = userName + ": " + userInput;
+    }
     /* Create a reliable packet of size 7 containing "packet\0" */
-    string formattedMessage = userName + ": " + userInput;
+    
     ENetPacket* packet = enet_packet_create(formattedMessage.c_str(),
         formattedMessage.length() + 1,
         ENET_PACKET_FLAG_RELIABLE);
 
     enet_host_broadcast(client, 0, packet);
     //enet_peer_send(event.peer, 0, packet);
+    
 }

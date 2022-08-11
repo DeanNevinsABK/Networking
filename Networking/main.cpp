@@ -90,7 +90,7 @@ void HandleEvent()
     {
         ENetEvent event;
         /* Wait up to 1000 milliseconds for an event. */
-        while (enet_host_service(server, &event, 1000) > 0)
+        if (enet_host_service(server, &event, 50) >= 0)
         {
             switch (event.type)
             {

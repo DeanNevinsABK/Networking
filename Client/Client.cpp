@@ -13,6 +13,8 @@ ENetPeer* peer;
 
 string userInput = "";
 string userName = "";
+bool hasConnected = false;
+bool hasChatEnded = false;
 
 bool CreateClient();
 int InitClient();
@@ -99,6 +101,7 @@ void HandleConnection()
     if (enet_host_service(client, &event, 5000) > 0 &&
         event.type == ENET_EVENT_TYPE_CONNECT)
     {
+        hasConnected = true;
         cout << "Connection to 127.0.0.1:1234 succeeded." << endl;
     }
     else
@@ -114,15 +117,18 @@ void HandleConnection()
 void HandleEvent()
 {
     /* Wait up to 1000 milliseconds for an event. */
-    while (enet_host_service(client, &event, 1000) > 0)
+    while (enet_host_service(client, &event, 50) >= 0)
     {
-        switch (event.type)
+        
+        cout << userName << ": ";
+        cin >> userInput;
+        switch (1)
         {
         case ENET_EVENT_TYPE_RECEIVE:
             /* Clean up the packet now that we're done using it. */
             enet_packet_destroy(event.packet);
 
-            HandlePacket(userName);
+            HandlePacket(userInput);
         }
     }
 }
